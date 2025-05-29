@@ -14,6 +14,8 @@ env:
   IMAGE_TAG: latest
 jobs:
   deploy:
+    with:
+      environment: staging
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
