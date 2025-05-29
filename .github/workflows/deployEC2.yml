@@ -1,0 +1,62 @@
+name: Build and Deploy BackendApp to ECS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+env:
+  ECR_IMAGE: ${{ vars.ECR_IMAGE }}
+  AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_BACKEND_SERVICE: ${{ vars.ECS_BACKEND_SERVICE }}
+  IMAGE_TAG: latest
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials
+        id: aws-credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: AKIAUCFQSW3IOB6WXSLA
+          aws-secret-access-key: 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
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+      - name: Build tag and push image to ECR
+        id: build-image
+        run: |
+          docker build -t $ECR_IMAGE .
+          docker tag $ECR_IMAGE:$IMAGE_TAG ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_IMAGE:$IMAGE_TAG
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_IMAGE:$IMAGE_TAG
+
+      - name: update image on lambda
+        run: |
+          aws lambda update-function-code \
+              --function-name metro-cuadrado-2 \
+              --image-uri ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_IMAGE:$IMAGE_TAG
+
+      - name: Cleanup old ECR images
+        run: |
+          IMAGES_JSON=$(aws ecr describe-images --repository-name $ECR_IMAGE)
+          LATEST_SHA=latest
+          IMAGES_TO_DELETE=$(echo $IMAGES_JSON | jq -r ".imageDetails[] | select(.imageTags[]? != \"$LATEST_SHA\").imageTags[0]")
+          for IMAGE_TAG in $IMAGES_TO_DELETE; do
+              aws ecr batch-delete-image --repository-name $ECR_IMAGE --image-ids imageTag=$IMAGE_TAG
+          done
+          UNTAGGED_IMAGES=$(echo $IMAGES_JSON | jq -r ".imageDetails[] | select(.imageTags == null).imageDigest")
+          for IMAGE_DIGEST in $UNTAGGED_IMAGES; do
+              aws ecr batch-delete-image --repository-name $ECR_IMAGE --image-ids imageDigest=$IMAGE_DIGEST
+          done
