@@ -1,4 +1,4 @@
-name: Build and Deploy BackendApp to ECS
+name: Build and Deploy staging to ECS
 
 on:
   workflow_dispatch:
