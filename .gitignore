@@ -1,0 +1,6 @@
+/venv
+/dev
+Dockerfile2
+chromedriver
+headless-chromium
+other.py

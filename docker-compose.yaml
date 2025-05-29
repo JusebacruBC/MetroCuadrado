@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  my_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ~/.aws/:/root/.aws:ro
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: ec2-log-metro-cuadrado
+        awslogs-stream: ec2-test-logs
+        awslogs-region: us-east-1
